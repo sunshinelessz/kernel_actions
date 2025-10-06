@@ -1,4 +1,4 @@
-name: Build Kernel SM6225 (Kernel 4.19) ----
+name: Build Kernel SM6225 (Kernel 4.19)
 
 on:
   workflow_dispatch:
@@ -20,36 +20,36 @@ jobs:
       NDK_URL: https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
 
     steps:
-    - name: Checkout workflow repo
-      uses: actions/checkout@v4
+      - name: Checkout workflow repo
+        uses: actions/checkout@v4
 
-    - name: Setup ccache cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.ccache
-        key: ${{ runner.os }}-ccache-${{ hashFiles('**/Makefile') }}
-        restore-keys: |
-          ${{ runner.os }}-ccache-
+      - name: Setup ccache cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('**/Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
 
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses-dev cpio unzip wget ccache libelf-dev clang-17 zip
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses-dev cpio unzip wget ccache libelf-dev clang-17 zip
 
-    - name: Clone kernel source
-      run: |
-        git clone --branch lineage-22.2 https://github.com/LineageOS/android_kernel_motorola_sm6225.git kernel_source
+      - name: Clone kernel source
+        run: |
+          git clone --branch lineage-22.2 https://github.com/LineageOS/android_kernel_motorola_sm6225.git kernel_source
 
-    - name: Setup Clang toolchain (NDK r25b)
-      run: |
-        chmod +x scripts/setup-toolchain.sh
-        ./scripts/setup-toolchain.sh ${{ env.NDK_URL }}
+      - name: Setup Clang toolchain (NDK r25b)
+        run: |
+          chmod +x scripts/setup-toolchain.sh
+          ./scripts/setup-toolchain.sh ${{ env.NDK_URL }}
 
-    - name: Setup updater-script for Moto G30
-      run: |
-        mkdir -p sideload
-        cat > sideload/updater-script << 'EOF'
+      - name: Setup updater-script for Moto G30
+        run: |
+          mkdir -p sideload
+          cat > sideload/updater-script << 'EOF'
 ui_print("Flashing kernel for Moto G30 (SM6225)...");
 
 if (file_getprop("/dev/block/by-name/boot") != "") then
@@ -71,37 +71,31 @@ endif;
 ui_print("Kernel flash completed!");
 EOF
 
-        # Baixar update-binary genérico do AOSP Android 15
-        wget -q -O sideload/update-binary https://android.googlesource.com/platform/bootable/recovery/+/refs/heads/android-15.0-release/tools/update-binary?format=TEXT
-        base64 --decode sideload/update-binary > sideload/update-binary.dec || true
-        mv sideload/update-binary.dec sideload/update-binary
-        chmod +x sideload/update-binary
+      - name: Build kernel and generate sideload zip
+        run: |
+          chmod +x scripts/build-kernel.sh
+          ./scripts/build-kernel.sh kernel_source/arch/arm64/configs/${{ github.event.inputs.defconfig }} "${{ env.ARTIFACT_NAME }}" sideload
+        env:
+          DEFCONFIG: ${{ github.event.inputs.defconfig }}
+          ARCH: ${{ env.ARCH }}
+          KBUILD_OUTPUT: ${{ env.KBUILD_OUTPUT }}
 
-    - name: Build kernel and generate sideload zip
-      run: |
-        chmod +x scripts/build-kernel.sh
-        ./scripts/build-kernel.sh kernel_source/arch/arm64/configs/${{ github.event.inputs.defconfig }} "${{ env.ARTIFACT_NAME }}" sideload
-      env:
-        DEFCONFIG: ${{ github.event.inputs.defconfig }}
-        ARCH: ${{ env.ARCH }}
-        KBUILD_OUTPUT: ${{ env.KBUILD_OUTPUT }}
+      - name: Create GitHub Release (draft)
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: kernel-sm6225-${{ github.run_id }}
+          name: kernel-sm6225-${{ github.run_id }}
+          body: "Kernel 4.19 para Moto G30 (SM6225, LineageOS 22.2 / Android 15) – build automático sideload zip"
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Create GitHub Release (draft)
-      id: create_release
-      uses: ncipollo/release-action@v1
-      with:
-        tag: kernel-sm6225-${{ github.run_id }}
-        name: kernel-sm6225-${{ github.run_id }}
-        body: "Kernel 4.19 para Moto G30 (SM6225, LineageOS 22.2 / Android 15) – build automático sideload zip"
-        draft: true
-        token: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload artifact to Release
-      uses: actions/upload-release-asset@v1
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./out/${{ env.ARTIFACT_NAME }}
-        asset_name: ${{ env.ARTIFACT_NAME }}
-        asset_content_type: application/zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload artifact to Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./out/${{ env.ARTIFACT_NAME }}
+          asset_name: ${{ env.ARTIFACT_NAME }}
+          asset_content_type: application/zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
