@@ -1,4 +1,4 @@
-name: Build Kernel SM6225 (Kernel 4.19)
+name: Build Kernel SM6225 (Kernel 4.19) ----
 
 on:
   workflow_dispatch:
